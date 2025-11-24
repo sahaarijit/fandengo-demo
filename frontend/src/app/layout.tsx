@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Fardango - Movie Tickets & Showtimes",
-  description: "Discover movies, check showtimes, and manage your watchlist with Fardango",
+  title: "Fandango - Movie Tickets & Showtimes",
+  description: "Discover movies, check showtimes, and manage your watchlist with Fandango",
 };
 
 export default function RootLayout({

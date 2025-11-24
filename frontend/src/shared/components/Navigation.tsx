@@ -56,7 +56,7 @@ export default function Navigation() {
           <Link href="/movies" className="flex items-center gap-2 group">
             <Film className="w-8 h-8 text-orange-500 group-hover:text-orange-400 transition-colors" />
             <span className="text-2xl font-bold text-white group-hover:text-orange-400 transition-colors">
-              Fardango
+              Fandango
             </span>
           </Link>
 
