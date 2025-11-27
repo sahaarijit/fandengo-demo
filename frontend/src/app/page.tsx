@@ -1,18 +1,18 @@
-'use client';
+"use client";
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function HomePage() {
-  const router = useRouter();
+	const router = useRouter();
 
-  useEffect(() => {
-    router.replace('/movies');
-  }, [router]);
+	useEffect(() => {
+		router.replace("/movies");
+	}, [router]);
 
-  return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-    </div>
-  );
+	return (
+		<div className="min-h-screen bg-gray-900 flex items-center justify-center">
+			<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+		</div>
+	);
 }

@@ -6,23 +6,23 @@ import { resolve } from "path";
 config({ path: resolve(__dirname, "../.env") });
 
 const nextConfig: NextConfig = {
-  output: 'standalone',
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'm.media-amazon.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'image.tmdb.org',
-      },
-      {
-        protocol: 'http',
-        hostname: 'localhost',
-      },
-    ],
-  },
+	output: "standalone",
+	images: {
+		remotePatterns: [
+			{
+				protocol: "https",
+				hostname: "m.media-amazon.com",
+			},
+			{
+				protocol: "https",
+				hostname: "image.tmdb.org",
+			},
+			{
+				protocol: "http",
+				hostname: "localhost",
+			},
+		],
+	},
 };
 
 export default nextConfig;
