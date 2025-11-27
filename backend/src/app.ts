@@ -1,6 +1,7 @@
 import express, { Express, Request, Response, NextFunction } from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
+import path from 'path'
 import exampleRoutes from './features/example/example.routes'
 import authRoutes from './features/auth/auth.routes'
 import moviesRoutes from './features/movies/movies.routes'
@@ -8,7 +9,8 @@ import movieDetailsRoutes from './features/movie-details/movie-details.routes'
 import watchlistRoutes from './features/watchlist/watchlist.routes'
 import { errorHandler } from './shared/middleware/error.middleware'
 
-dotenv.config()
+// Load environment variables from root .env
+dotenv.config({ path: path.resolve(__dirname, '../../.env') })
 
 const app: Express = express()
 

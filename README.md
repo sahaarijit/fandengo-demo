@@ -185,17 +185,21 @@ DELETE /api/watchlist/:movieId            # Remove movie from watchlist
 
 2. **Configure environment variables**
 
-   Backend (`backend/.env`):
+   Root (`.env`):
+   ```bash
+   cp .env.example .env
+   ```
+
+   Edit `.env` with your configuration:
    ```env
+   # Backend Configuration
    NODE_ENV=development
    PORT=5000
    FRONTEND_URL=http://localhost:3000
    MONGODB_URI=mongodb://localhost:27017/fandango_clone
    JWT_SECRET=your-secret-key-here
-   ```
 
-   Frontend (`frontend/.env.local`):
-   ```env
+   # Frontend Configuration
    NEXT_PUBLIC_API_URL=http://localhost:5000
    ```
 
