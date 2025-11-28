@@ -3,8 +3,9 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { User } from "./user.model";
 import { SignupDto, LoginDto } from "./auth.schema";
+import { AuthRequest } from "./auth.middleware";
+import { env } from "../../shared/config/env";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
 const JWT_EXPIRES_IN = "7d";
 
 export class AuthController {
@@ -37,7 +38,7 @@ export class AuthController {
 			});
 
 			// Generate JWT token
-			const token = jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+			const token = jwt.sign({ userId: user._id, email: user.email }, env.JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
 			res.status(201).json({
 				success: true,
@@ -84,7 +85,7 @@ export class AuthController {
 			}
 
 			// Generate JWT token
-			const token = jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+			const token = jwt.sign({ userId: user._id, email: user.email }, env.JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
 			res.status(200).json({
 				success: true,
@@ -106,9 +107,9 @@ export class AuthController {
 	 * Get current user profile
 	 * @route GET /api/auth/profile
 	 */
-	static async getProfile(req: Request, res: Response, next: NextFunction): Promise<void> {
+	static async getProfile(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
 		try {
-			const userId = (req as any).userId;
+			const userId = req.userId;
 
 			const user = await User.findById(userId).select("-password");
 			if (!user) {

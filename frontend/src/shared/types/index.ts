@@ -1,28 +1,3 @@
-// ==================== Legacy Types ====================
-export interface Item {
-	_id: string;
-	name: string;
-	description?: string;
-	quantity: number;
-	isActive: boolean;
-	createdAt: string;
-	updatedAt: string;
-}
-
-export interface CreateItemDto {
-	name: string;
-	description?: string;
-	quantity: number;
-	isActive?: boolean;
-}
-
-export interface UpdateItemDto {
-	name?: string;
-	description?: string;
-	quantity?: number;
-	isActive?: boolean;
-}
-
 export interface ApiResponse<T = any> {
 	success: boolean;
 	message?: string;

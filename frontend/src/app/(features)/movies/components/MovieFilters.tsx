@@ -1,7 +1,7 @@
 "use client";
 
 import { Search, SlidersHorizontal } from "lucide-react";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { debounce } from "lodash";
 
 interface MovieFiltersProps {
@@ -41,7 +41,8 @@ const GENRES = [
 
 const RATINGS = ["G", "PG", "PG-13", "R", "NR"];
 
-const YEARS = Array.from({ length: 95 }, (_, i) => 2025 - i);
+const CURRENT_YEAR = new Date().getFullYear();
+const YEARS = Array.from({ length: 95 }, (_, i) => CURRENT_YEAR - i);
 
 export default function MovieFilters({
 	onSearchChange,
@@ -66,6 +67,13 @@ export default function MovieFilters({
 		}, 500),
 		[onSearchChange],
 	);
+
+	// Cleanup debounced function on unmount to prevent memory leaks
+	useEffect(() => {
+		return () => {
+			debouncedSearch.cancel();
+		};
+	}, [debouncedSearch]);
 
 	const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const value = e.target.value;

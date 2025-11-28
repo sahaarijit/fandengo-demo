@@ -15,22 +15,34 @@ export interface LoginData {
 export class AuthService {
 	static async signup(data: SignupData): Promise<AuthResponse> {
 		const response = await apiService.post<AuthResponse>("/api/auth/signup", data);
-		return response.data!;
+		if (!response.data) {
+			throw new Error("Invalid response from server");
+		}
+		return response.data;
 	}
 
 	static async login(data: LoginData): Promise<AuthResponse> {
 		const response = await apiService.post<AuthResponse>("/api/auth/login", data);
-		return response.data!;
+		if (!response.data) {
+			throw new Error("Invalid response from server");
+		}
+		return response.data;
 	}
 
 	static async getProfile(): Promise<{ user: User }> {
 		const response = await apiService.get<{ user: User }>("/api/auth/profile");
-		return response.data!;
+		if (!response.data) {
+			throw new Error("Invalid response from server");
+		}
+		return response.data;
 	}
 
 	static async logout(): Promise<{ message: string }> {
 		const response = await apiService.post<{ message: string }>("/api/auth/logout");
-		return response.data!;
+		if (!response.data) {
+			throw new Error("Invalid response from server");
+		}
+		return response.data;
 	}
 
 	static saveToken(token: string): void {

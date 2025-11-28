@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
+import { env } from "../../shared/config/env";
 
 export interface AuthRequest extends Request {
 	userId?: string;
@@ -23,9 +22,9 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
 		const token = authHeader.substring(7);
 
 		try {
-			const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; email: string };
-			(req as any).userId = decoded.userId;
-			(req as any).userEmail = decoded.email;
+			const decoded = jwt.verify(token, env.JWT_SECRET) as { userId: string; email: string };
+			(req as AuthRequest).userId = decoded.userId;
+			(req as AuthRequest).userEmail = decoded.email;
 			next();
 		} catch (jwtError) {
 			res.status(401).json({

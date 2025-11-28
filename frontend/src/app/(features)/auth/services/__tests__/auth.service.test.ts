@@ -57,6 +57,18 @@ describe("AuthService", () => {
 			});
 			expect(result).toEqual(mockResponse.data);
 		});
+
+		it("should throw error when response.data is undefined", async () => {
+			(apiService.post as jest.Mock).mockResolvedValue({ data: undefined });
+
+			await expect(
+				AuthService.signup({
+					email: "test@example.com",
+					password: "password123",
+					name: "Test",
+				})
+			).rejects.toThrow("Invalid response from server");
+		});
 	});
 
 	describe("login", () => {
@@ -80,6 +92,17 @@ describe("AuthService", () => {
 			});
 			expect(result).toEqual(mockResponse.data);
 		});
+
+		it("should throw error when response.data is undefined", async () => {
+			(apiService.post as jest.Mock).mockResolvedValue({ data: undefined });
+
+			await expect(
+				AuthService.login({
+					email: "test@example.com",
+					password: "password123",
+				})
+			).rejects.toThrow("Invalid response from server");
+		});
 	});
 
 	describe("getProfile", () => {
@@ -96,6 +119,12 @@ describe("AuthService", () => {
 			expect(apiService.get).toHaveBeenCalledWith("/api/auth/profile");
 			expect(result).toEqual(mockResponse.data);
 		});
+
+		it("should throw error when response.data is undefined", async () => {
+			(apiService.get as jest.Mock).mockResolvedValue({ data: undefined });
+
+			await expect(AuthService.getProfile()).rejects.toThrow("Invalid response from server");
+		});
 	});
 
 	describe("logout", () => {
@@ -107,6 +136,12 @@ describe("AuthService", () => {
 
 			expect(apiService.post).toHaveBeenCalledWith("/api/auth/logout");
 			expect(result).toEqual(mockResponse.data);
+		});
+
+		it("should throw error when response.data is undefined", async () => {
+			(apiService.post as jest.Mock).mockResolvedValue({ data: undefined });
+
+			await expect(AuthService.logout()).rejects.toThrow("Invalid response from server");
 		});
 	});
 

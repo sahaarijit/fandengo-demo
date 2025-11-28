@@ -1,17 +1,18 @@
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import mongoose from "mongoose";
 import { Watchlist } from "./watchlist.model";
 import { Movie } from "../movies/movie.model";
 import { AddToWatchlistDto, RemoveFromWatchlistDto } from "./watchlist.schema";
+import { AuthRequest } from "../auth/auth.middleware";
 
 export class WatchlistController {
 	/**
 	 * Get all watchlist items for current user
 	 * @route GET /api/watchlist
 	 */
-	static async getAll(req: Request, res: Response, next: NextFunction): Promise<void> {
+	static async getAll(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
 		try {
-			const userId = (req as any).userId;
+			const userId = req.userId;
 
 			const watchlistItems = await Watchlist.find({ userId }).populate("movieId").select("-__v").sort({ createdAt: -1 });
 
@@ -32,9 +33,9 @@ export class WatchlistController {
 	 * Get watchlist count for current user
 	 * @route GET /api/watchlist/count
 	 */
-	static async getCount(req: Request, res: Response, next: NextFunction): Promise<void> {
+	static async getCount(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
 		try {
-			const userId = (req as any).userId;
+			const userId = req.userId;
 
 			const count = await Watchlist.countDocuments({ userId });
 
@@ -53,9 +54,9 @@ export class WatchlistController {
 	 * Add movie to watchlist
 	 * @route POST /api/watchlist
 	 */
-	static async add(req: Request, res: Response, next: NextFunction): Promise<void> {
+	static async add(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
 		try {
-			const userId = (req as any).userId;
+			const userId = req.userId;
 			const { movieId } = req.body as AddToWatchlistDto;
 
 			// Check if movie exists
@@ -103,9 +104,9 @@ export class WatchlistController {
 	 * Remove movie from watchlist
 	 * @route DELETE /api/watchlist/:movieId
 	 */
-	static async remove(req: Request, res: Response, next: NextFunction): Promise<void> {
+	static async remove(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
 		try {
-			const userId = (req as any).userId;
+			const userId = req.userId;
 			const { movieId } = req.params;
 
 			// Validate MongoDB ObjectId

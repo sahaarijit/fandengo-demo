@@ -1,10 +1,14 @@
 import app from "./app";
-import { connectDatabase } from "./shared/config/database";
+import { connectDatabase, disconnectDatabase } from "./shared/config/database";
+import { validateEnv } from "./shared/config/env";
 
 const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
 	try {
+		// Validate required environment variables
+		validateEnv();
+
 		// Connect to MongoDB
 		await connectDatabase();
 
@@ -24,11 +28,13 @@ const startServer = async () => {
 // Handle graceful shutdown
 process.on("SIGTERM", async () => {
 	console.log("SIGTERM signal received: closing HTTP server");
+	await disconnectDatabase();
 	process.exit(0);
 });
 
 process.on("SIGINT", async () => {
 	console.log("SIGINT signal received: closing HTTP server");
+	await disconnectDatabase();
 	process.exit(0);
 });
 

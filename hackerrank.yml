@@ -8,9 +8,15 @@ configuration:
   readonly_paths:
     - backend/**/*.test.ts
     - frontend/**/*.test.ts
+    - frontend/**/*.test.tsx
+    - backend/jest.config.js
+    - frontend/jest.config.js
+    - hackerrank.yml
+    - "*.xml"
+    - scripts/merge-junit.js
   ide_config:
     default_open_files:
-      - src/README.md
+      - README.md
     project_menu:
       run: npm run dev
       install: npm install

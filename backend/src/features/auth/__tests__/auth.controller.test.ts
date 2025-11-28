@@ -1,213 +1,269 @@
 /**
  * Auth Controller Unit Tests
- * Tests authentication logic including validation, password handling, and token generation
+ * Tests authentication logic with mocked dependencies for coverage
  */
 
-describe("Auth Controller", () => {
-	// Mock user data
-	const mockUsers: any[] = [];
+import { Request, Response, NextFunction } from "express";
+import { AuthController } from "../auth.controller";
+import { User } from "../user.model";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 
-	// Helper functions to simulate auth logic
-	const isValidEmail = (email: string): boolean => {
-		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-		return emailRegex.test(email);
-	};
+// Mock dependencies
+jest.mock("../user.model");
+jest.mock("bcryptjs");
+jest.mock("jsonwebtoken");
+jest.mock("../../../shared/config/env", () => ({
+	env: {
+		JWT_SECRET: "test-secret-key",
+	},
+}));
 
-	const isValidPassword = (password: string): boolean => {
-		return Boolean(password && password.length >= 6);
-	};
+const MockedUser = User as jest.Mocked<typeof User>;
+const mockedBcrypt = bcrypt as jest.Mocked<typeof bcrypt>;
+const mockedJwt = jwt as jest.Mocked<typeof jwt>;
 
-	const hashPassword = (password: string): string => {
-		return `hashed_${password}`;
-	};
-
-	const comparePassword = (plainPassword: string, hashedPassword: string): boolean => {
-		return hashedPassword === `hashed_${plainPassword}`;
-	};
-
-	const generateToken = (userId: string): string => {
-		return `jwt_token_${userId}`;
-	};
-
-	const createUser = (email: string, password: string, name: string) => {
-		if (mockUsers.find((u) => u.email === email)) {
-			throw new Error("User already exists");
-		}
-		const user = {
-			_id: `user_${Date.now()}`,
-			email,
-			password: hashPassword(password),
-			name,
-			createdAt: new Date(),
-		};
-		mockUsers.push(user);
-		return user;
-	};
-
-	const findUserByEmail = (email: string) => {
-		return mockUsers.find((u) => u.email === email);
-	};
-
-	const sanitizeUser = (user: any) => {
-		const { password, ...sanitized } = user;
-		return sanitized;
-	};
+describe("AuthController", () => {
+	let mockReq: Partial<Request>;
+	let mockRes: Partial<Response>;
+	let mockNext: NextFunction;
 
 	beforeEach(() => {
-		mockUsers.length = 0; // Clear mock users
+		jest.clearAllMocks();
+
+		mockReq = {
+			body: {},
+			params: {},
+		};
+
+		mockRes = {
+			status: jest.fn().mockReturnThis(),
+			json: jest.fn().mockReturnThis(),
+		};
+
+		mockNext = jest.fn();
 	});
 
-	describe("POST /api/auth/signup", () => {
-		it("should create a new user with valid data", () => {
-			const userData = {
+	describe("signup", () => {
+		const validSignupData = {
+			email: "test@example.com",
+			password: "password123",
+			name: "Test User",
+		};
+
+		it("should create a new user successfully", async () => {
+			mockReq.body = validSignupData;
+
+			const mockUser = {
+				_id: "user123",
+				email: validSignupData.email,
+				name: validSignupData.name,
+				password: "hashedPassword",
+			};
+
+			(MockedUser.findOne as jest.Mock).mockResolvedValue(null);
+			(mockedBcrypt.hash as jest.Mock).mockResolvedValue("hashedPassword");
+			(MockedUser.create as jest.Mock).mockResolvedValue(mockUser);
+			(mockedJwt.sign as jest.Mock).mockReturnValue("mockJwtToken");
+
+			await AuthController.signup(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(MockedUser.findOne).toHaveBeenCalledWith({ email: validSignupData.email });
+			expect(mockedBcrypt.hash).toHaveBeenCalledWith(validSignupData.password, 10);
+			expect(MockedUser.create).toHaveBeenCalledWith({
+				email: validSignupData.email,
+				password: "hashedPassword",
+				name: validSignupData.name,
+			});
+			expect(mockRes.status).toHaveBeenCalledWith(201);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: true,
+				data: {
+					token: "mockJwtToken",
+					user: {
+						id: "user123",
+						email: validSignupData.email,
+						name: validSignupData.name,
+					},
+				},
+			});
+		});
+
+		it("should return 400 if user already exists", async () => {
+			mockReq.body = validSignupData;
+
+			const existingUser = { email: validSignupData.email };
+			(MockedUser.findOne as jest.Mock).mockResolvedValue(existingUser);
+
+			await AuthController.signup(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(mockRes.status).toHaveBeenCalledWith(400);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: false,
+				error: "User with this email already exists",
+			});
+		});
+
+		it("should call next with error on exception", async () => {
+			mockReq.body = validSignupData;
+			const error = new Error("Database error");
+			(MockedUser.findOne as jest.Mock).mockRejectedValue(error);
+
+			await AuthController.signup(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(mockNext).toHaveBeenCalledWith(error);
+		});
+	});
+
+	describe("login", () => {
+		const validLoginData = {
+			email: "test@example.com",
+			password: "password123",
+		};
+
+		it("should login user with valid credentials", async () => {
+			mockReq.body = validLoginData;
+
+			const mockUser = {
+				_id: "user123",
+				email: validLoginData.email,
+				name: "Test User",
+				password: "hashedPassword",
+			};
+
+			(MockedUser.findOne as jest.Mock).mockResolvedValue(mockUser);
+			(mockedBcrypt.compare as jest.Mock).mockResolvedValue(true);
+			(mockedJwt.sign as jest.Mock).mockReturnValue("mockJwtToken");
+
+			await AuthController.login(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(MockedUser.findOne).toHaveBeenCalledWith({ email: validLoginData.email });
+			expect(mockedBcrypt.compare).toHaveBeenCalledWith(validLoginData.password, "hashedPassword");
+			expect(mockRes.status).toHaveBeenCalledWith(200);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: true,
+				data: {
+					token: "mockJwtToken",
+					user: {
+						id: "user123",
+						email: validLoginData.email,
+						name: "Test User",
+					},
+				},
+			});
+		});
+
+		it("should return 401 if user not found", async () => {
+			mockReq.body = validLoginData;
+			(MockedUser.findOne as jest.Mock).mockResolvedValue(null);
+
+			await AuthController.login(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(mockRes.status).toHaveBeenCalledWith(401);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: false,
+				error: "Invalid email or password",
+			});
+		});
+
+		it("should return 401 if password is invalid", async () => {
+			mockReq.body = validLoginData;
+
+			const mockUser = {
+				_id: "user123",
+				email: validLoginData.email,
+				password: "hashedPassword",
+			};
+
+			(MockedUser.findOne as jest.Mock).mockResolvedValue(mockUser);
+			(mockedBcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+			await AuthController.login(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(mockRes.status).toHaveBeenCalledWith(401);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: false,
+				error: "Invalid email or password",
+			});
+		});
+
+		it("should call next with error on exception", async () => {
+			mockReq.body = validLoginData;
+			const error = new Error("Database error");
+			(MockedUser.findOne as jest.Mock).mockRejectedValue(error);
+
+			await AuthController.login(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(mockNext).toHaveBeenCalledWith(error);
+		});
+	});
+
+	describe("getProfile", () => {
+		it("should return user profile without password", async () => {
+			(mockReq as any).userId = "user123";
+
+			const mockUser = {
+				_id: "user123",
 				email: "test@example.com",
-				password: "password123",
 				name: "Test User",
 			};
 
-			expect(isValidEmail(userData.email)).toBe(true);
-			expect(isValidPassword(userData.password)).toBe(true);
+			const mockSelect = jest.fn().mockResolvedValue(mockUser);
+			(MockedUser.findById as jest.Mock).mockReturnValue({ select: mockSelect });
 
-			const user = createUser(userData.email, userData.password, userData.name);
-			const token = generateToken(user._id);
+			await AuthController.getProfile(mockReq as Request, mockRes as Response, mockNext);
 
-			expect(user).toHaveProperty("email", userData.email);
-			expect(user).toHaveProperty("name", userData.name);
-			expect(token).toBeDefined();
-
-			const sanitized = sanitizeUser(user);
-			expect(sanitized).not.toHaveProperty("password");
+			expect(MockedUser.findById).toHaveBeenCalledWith("user123");
+			expect(mockSelect).toHaveBeenCalledWith("-password");
+			expect(mockRes.status).toHaveBeenCalledWith(200);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: true,
+				data: {
+					user: {
+						id: "user123",
+						email: "test@example.com",
+						name: "Test User",
+					},
+				},
+			});
 		});
 
-		it("should reject signup with missing fields", () => {
-			const invalidData = { email: "test@example.com" }; // Missing password and name
+		it("should return 404 if user not found", async () => {
+			(mockReq as any).userId = "user123";
 
-			expect(invalidData).not.toHaveProperty("password");
-			expect(invalidData).not.toHaveProperty("name");
+			const mockSelect = jest.fn().mockResolvedValue(null);
+			(MockedUser.findById as jest.Mock).mockReturnValue({ select: mockSelect });
+
+			await AuthController.getProfile(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(mockRes.status).toHaveBeenCalledWith(404);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: false,
+				error: "User not found",
+			});
 		});
 
-		it("should reject signup with invalid email", () => {
-			expect(isValidEmail("invalid-email")).toBe(false);
-			expect(isValidEmail("test@")).toBe(false);
-			expect(isValidEmail("@example.com")).toBe(false);
-		});
+		it("should call next with error on exception", async () => {
+			(mockReq as any).userId = "user123";
+			const error = new Error("Database error");
+			const mockSelect = jest.fn().mockRejectedValue(error);
+			(MockedUser.findById as jest.Mock).mockReturnValue({ select: mockSelect });
 
-		it("should reject duplicate email", () => {
-			const userData = {
-				email: "test@example.com",
-				password: "password123",
-				name: "Test User",
-			};
+			await AuthController.getProfile(mockReq as Request, mockRes as Response, mockNext);
 
-			// First signup succeeds
-			createUser(userData.email, userData.password, userData.name);
-
-			// Duplicate signup should throw
-			expect(() => {
-				createUser(userData.email, userData.password, userData.name);
-			}).toThrow("User already exists");
-		});
-	});
-
-	describe("POST /api/auth/login", () => {
-		beforeEach(() => {
-			// Create a test user
-			createUser("test@example.com", "password123", "Test User");
-		});
-
-		it("should login with correct credentials", () => {
-			const user = findUserByEmail("test@example.com");
-
-			expect(user).toBeDefined();
-			expect(comparePassword("password123", user!.password)).toBe(true);
-
-			const token = generateToken(user!._id);
-			expect(token).toBeDefined();
-
-			const sanitized = sanitizeUser(user);
-			expect(sanitized).not.toHaveProperty("password");
-		});
-
-		it("should reject login with incorrect password", () => {
-			const user = findUserByEmail("test@example.com");
-
-			expect(user).toBeDefined();
-			expect(comparePassword("wrongpassword", user!.password)).toBe(false);
-		});
-
-		it("should reject login with non-existent email", () => {
-			const user = findUserByEmail("nonexistent@example.com");
-
-			expect(user).toBeUndefined();
-		});
-
-		it("should reject login with missing fields", () => {
-			const invalidLogin = { email: "test@example.com" }; // Missing password
-
-			expect(invalidLogin).not.toHaveProperty("password");
+			expect(mockNext).toHaveBeenCalledWith(error);
 		});
 	});
 
-	describe("GET /api/auth/profile", () => {
-		it("should return user profile without password", () => {
-			const user = createUser("test@example.com", "password123", "Test User");
-			const sanitized = sanitizeUser(user);
+	describe("logout", () => {
+		it("should return success message", async () => {
+			await AuthController.logout(mockReq as Request, mockRes as Response, mockNext);
 
-			expect(sanitized).toHaveProperty("email", "test@example.com");
-			expect(sanitized).toHaveProperty("name", "Test User");
-			expect(sanitized).not.toHaveProperty("password");
-		});
-
-		it("should validate token format", () => {
-			const user = createUser("test@example.com", "password123", "Test User");
-			const token = generateToken(user._id);
-
-			expect(token).toMatch(/^jwt_token_/);
-			expect(token).toContain(user._id);
-		});
-
-		it("should reject invalid token", () => {
-			const invalidToken = "invalid-token";
-			const isValid = invalidToken.startsWith("jwt_token_");
-
-			expect(isValid).toBe(false);
-		});
-	});
-
-	describe("POST /api/auth/logout", () => {
-		it("should successfully logout", () => {
-			// Logout is stateless in JWT - just verify it succeeds
-			const user = createUser("test@example.com", "password123", "Test User");
-			const token = generateToken(user._id);
-
-			expect(token).toBeDefined();
-			// In a real app, logout might invalidate token or clear cookies
-			// Here we just verify the token was valid
-			expect(token.startsWith("jwt_token_")).toBe(true);
-		});
-	});
-
-	describe("Password Security", () => {
-		it("should hash password before storing", () => {
-			const plainPassword = "password123";
-			const hashed = hashPassword(plainPassword);
-
-			expect(hashed).not.toBe(plainPassword);
-			expect(hashed).toContain("hashed_");
-		});
-
-		it("should verify correct password", () => {
-			const plainPassword = "password123";
-			const hashed = hashPassword(plainPassword);
-
-			expect(comparePassword(plainPassword, hashed)).toBe(true);
-		});
-
-		it("should reject incorrect password", () => {
-			const plainPassword = "password123";
-			const hashed = hashPassword(plainPassword);
-
-			expect(comparePassword("wrongpassword", hashed)).toBe(false);
+			expect(mockRes.status).toHaveBeenCalledWith(200);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: true,
+				data: { message: "Logged out successfully" },
+			});
 		});
 	});
 });

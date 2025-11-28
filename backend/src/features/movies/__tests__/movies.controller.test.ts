@@ -1,10 +1,22 @@
 /**
  * Movies Controller Unit Tests
- * Tests movie filtering, pagination, and query handling logic
+ * Tests movie filtering, pagination, and query handling with mocked dependencies
  */
 
-describe("Movies Controller", () => {
-	// Sample movie data for testing
+import { Request, Response, NextFunction } from "express";
+import { MoviesController } from "../movies.controller";
+import { Movie } from "../movie.model";
+
+// Mock Movie model
+jest.mock("../movie.model");
+
+const MockedMovie = Movie as jest.Mocked<typeof Movie>;
+
+describe("MoviesController", () => {
+	let mockReq: Partial<Request>;
+	let mockRes: Partial<Response>;
+	let mockNext: NextFunction;
+
 	const sampleMovies = [
 		{
 			_id: "507f1f77bcf86cd799439011",
@@ -13,7 +25,6 @@ describe("Movies Controller", () => {
 			mpaaRating: "R",
 			rating: 4.9,
 			releaseYear: 1994,
-			duration: 142,
 		},
 		{
 			_id: "507f1f77bcf86cd799439012",
@@ -22,174 +33,171 @@ describe("Movies Controller", () => {
 			mpaaRating: "PG-13",
 			rating: 4.8,
 			releaseYear: 2008,
-			duration: 152,
-		},
-		{
-			_id: "507f1f77bcf86cd799439013",
-			title: "Inception",
-			genres: ["Action", "Sci-Fi", "Thriller"],
-			mpaaRating: "PG-13",
-			rating: 4.7,
-			releaseYear: 2010,
-			duration: 148,
-		},
-		{
-			_id: "507f1f77bcf86cd799439014",
-			title: "The Godfather",
-			genres: ["Crime", "Drama"],
-			mpaaRating: "R",
-			rating: 4.9,
-			releaseYear: 1972,
-			duration: 175,
-		},
-		{
-			_id: "507f1f77bcf86cd799439015",
-			title: "Toy Story",
-			genres: ["Animation", "Adventure", "Comedy"],
-			mpaaRating: "G",
-			rating: 4.5,
-			releaseYear: 1995,
-			duration: 81,
 		},
 	];
 
-	// Helper functions to simulate controller logic
-	const filterByGenre = (movies: any[], genre: string) => {
-		return movies.filter((m) => m.genres.includes(genre));
-	};
+	beforeEach(() => {
+		jest.clearAllMocks();
 
-	const filterByMpaaRating = (movies: any[], rating: string) => {
-		return movies.filter((m) => m.mpaaRating === rating);
-	};
-
-	const filterByYear = (movies: any[], year: number) => {
-		return movies.filter((m) => m.releaseYear === year);
-	};
-
-	const searchByTitle = (movies: any[], search: string) => {
-		const regex = new RegExp(search, "i");
-		return movies.filter((m) => regex.test(m.title));
-	};
-
-	const sortMovies = (movies: any[], sortBy: string, sortOrder: string) => {
-		return [...movies].sort((a, b) => {
-			const aVal = a[sortBy];
-			const bVal = b[sortBy];
-			return sortOrder === "asc" ? (aVal > bVal ? 1 : -1) : aVal < bVal ? 1 : -1;
-		});
-	};
-
-	const paginate = (movies: any[], page: number, limit: number) => {
-		const start = (page - 1) * limit;
-		return {
-			movies: movies.slice(start, start + limit),
-			pagination: {
-				page,
-				limit,
-				totalCount: movies.length,
-				totalPages: Math.ceil(movies.length / limit),
-			},
+		mockReq = {
+			query: {},
+			params: {},
 		};
-	};
 
-	describe("GET /api/movies", () => {
-		it("should return all movies with default pagination", () => {
-			const result = paginate(sampleMovies, 1, 20);
+		mockRes = {
+			status: jest.fn().mockReturnThis(),
+			json: jest.fn().mockReturnThis(),
+		};
 
-			expect(result.movies).toHaveLength(5);
-			expect(result.pagination.page).toBe(1);
-			expect(result.pagination.totalCount).toBe(5);
-		});
+		mockNext = jest.fn();
+	});
 
-		it("should support pagination", () => {
-			const result = paginate(sampleMovies, 1, 2);
+	describe("getAll", () => {
+		const setupMockChain = (movies: any[], count: number) => {
+			const mockSelect = jest.fn().mockResolvedValue(movies);
+			const mockLimit = jest.fn().mockReturnValue({ select: mockSelect });
+			const mockSkip = jest.fn().mockReturnValue({ limit: mockLimit });
+			const mockSort = jest.fn().mockReturnValue({ skip: mockSkip });
+			(MockedMovie.find as jest.Mock).mockReturnValue({ sort: mockSort });
+			(MockedMovie.countDocuments as jest.Mock).mockResolvedValue(count);
+		};
 
-			expect(result.movies).toHaveLength(2);
-			expect(result.pagination.page).toBe(1);
-			expect(result.pagination.limit).toBe(2);
-			expect(result.pagination.totalPages).toBe(3);
-		});
+		it("should return all movies with default pagination", async () => {
+			mockReq.query = {};
+			setupMockChain(sampleMovies, 2);
 
-		it("should return correct page of results", () => {
-			const result = paginate(sampleMovies, 2, 2);
+			await MoviesController.getAll(mockReq as Request, mockRes as Response, mockNext);
 
-			expect(result.movies).toHaveLength(2);
-			expect(result.pagination.page).toBe(2);
-		});
-
-		it("should filter by genre", () => {
-			const filtered = filterByGenre(sampleMovies, "Drama");
-
-			expect(filtered.length).toBeGreaterThan(0);
-			filtered.forEach((movie) => {
-				expect(movie.genres).toContain("Drama");
+			expect(MockedMovie.find).toHaveBeenCalledWith({});
+			expect(mockRes.status).toHaveBeenCalledWith(200);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: true,
+				data: {
+					movies: sampleMovies,
+					pagination: {
+						page: 1,
+						limit: 20,
+						totalCount: 2,
+						totalPages: 1,
+					},
+				},
 			});
 		});
 
-		it("should filter by mpaaRating", () => {
-			const filtered = filterByMpaaRating(sampleMovies, "R");
+		it("should apply search filter", async () => {
+			mockReq.query = { search: "Dark" };
+			setupMockChain([sampleMovies[1]], 1);
 
-			expect(filtered.length).toBeGreaterThan(0);
-			filtered.forEach((movie) => {
-				expect(movie.mpaaRating).toBe("R");
+			await MoviesController.getAll(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(MockedMovie.find).toHaveBeenCalledWith({
+				title: { $regex: "Dark", $options: "i" },
 			});
 		});
 
-		it("should filter by release year", () => {
-			const filtered = filterByYear(sampleMovies, 2008);
+		it("should apply genre filter", async () => {
+			mockReq.query = { genre: "Drama" };
+			setupMockChain(sampleMovies, 2);
 
-			expect(filtered).toHaveLength(1);
-			expect(filtered[0].title).toBe("The Dark Knight");
+			await MoviesController.getAll(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(MockedMovie.find).toHaveBeenCalledWith({ genres: "Drama" });
 		});
 
-		it("should sort by title ascending", () => {
-			const sorted = sortMovies(sampleMovies, "title", "asc");
+		it("should apply mpaaRating filter", async () => {
+			mockReq.query = { mpaaRating: "PG-13" };
+			setupMockChain([sampleMovies[1]], 1);
 
-			const titles = sorted.map((m) => m.title);
-			const sortedTitles = [...titles].sort();
-			expect(titles).toEqual(sortedTitles);
+			await MoviesController.getAll(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(MockedMovie.find).toHaveBeenCalledWith({ mpaaRating: "PG-13" });
 		});
 
-		it("should sort by rating descending", () => {
-			const sorted = sortMovies(sampleMovies, "rating", "desc");
+		it("should apply releaseYear filter", async () => {
+			mockReq.query = { releaseYear: "2008" } as any;
+			setupMockChain([sampleMovies[1]], 1);
 
-			const ratings = sorted.map((m) => m.rating);
-			for (let i = 0; i < ratings.length - 1; i++) {
-				expect(ratings[i]).toBeGreaterThanOrEqual(ratings[i + 1]);
-			}
+			await MoviesController.getAll(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(MockedMovie.find).toHaveBeenCalledWith({ releaseYear: "2008" });
 		});
 
-		it("should search by title (partial match)", () => {
-			const results = searchByTitle(sampleMovies, "Dark");
+		it("should apply custom sorting", async () => {
+			mockReq.query = { sortBy: "rating", sortOrder: "desc" };
+			setupMockChain(sampleMovies, 2);
 
-			expect(results.length).toBeGreaterThan(0);
-			expect(results[0].title).toContain("Dark");
+			await MoviesController.getAll(mockReq as Request, mockRes as Response, mockNext);
+
+			const sortCall = (MockedMovie.find as jest.Mock).mock.results[0].value.sort;
+			expect(sortCall).toHaveBeenCalledWith({ rating: -1 });
 		});
 
-		it("should search by title (case insensitive)", () => {
-			const results = searchByTitle(sampleMovies, "dark");
+		it("should apply pagination", async () => {
+			mockReq.query = { page: "2", limit: "10" } as any;
+			setupMockChain([], 25);
 
-			expect(results.length).toBeGreaterThan(0);
-			expect(results[0].title.toLowerCase()).toContain("dark");
-		});
+			await MoviesController.getAll(mockReq as Request, mockRes as Response, mockNext);
 
-		it("should combine multiple filters", () => {
-			let filtered = filterByGenre(sampleMovies, "Action");
-			filtered = filterByMpaaRating(filtered, "PG-13");
-			const sorted = sortMovies(filtered, "rating", "desc");
-
-			expect(sorted.length).toBeGreaterThan(0);
-			sorted.forEach((movie) => {
-				expect(movie.genres).toContain("Action");
-				expect(movie.mpaaRating).toBe("PG-13");
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: true,
+				data: {
+					movies: [],
+					pagination: {
+						page: "2",
+						limit: "10",
+						totalCount: 25,
+						totalPages: 3,
+					},
+				},
 			});
 		});
 
-		it("should return empty array when no movies match filters", () => {
-			let filtered = filterByGenre(sampleMovies, "Horror");
-			filtered = filterByYear(filtered, 2025);
+		it("should combine multiple filters", async () => {
+			mockReq.query = {
+				search: "Knight",
+				genre: "Action",
+				mpaaRating: "PG-13",
+			};
+			setupMockChain([sampleMovies[1]], 1);
 
-			expect(filtered).toHaveLength(0);
+			await MoviesController.getAll(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(MockedMovie.find).toHaveBeenCalledWith({
+				title: { $regex: "Knight", $options: "i" },
+				genres: "Action",
+				mpaaRating: "PG-13",
+			});
+		});
+
+		it("should return empty array when no movies match", async () => {
+			mockReq.query = { genre: "Horror" };
+			setupMockChain([], 0);
+
+			await MoviesController.getAll(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: true,
+				data: {
+					movies: [],
+					pagination: {
+						page: 1,
+						limit: 20,
+						totalCount: 0,
+						totalPages: 0,
+					},
+				},
+			});
+		});
+
+		it("should call next with error on exception", async () => {
+			const error = new Error("Database error");
+			(MockedMovie.find as jest.Mock).mockImplementation(() => {
+				throw error;
+			});
+
+			await MoviesController.getAll(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(mockNext).toHaveBeenCalledWith(error);
 		});
 	});
 });

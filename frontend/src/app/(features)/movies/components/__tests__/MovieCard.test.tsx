@@ -1,13 +1,13 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import MovieCard from "../MovieCard";
 import { Movie } from "@/shared/types";
 
-// Mock next/image
+// Mock next/image with onError support
 jest.mock("next/image", () => ({
 	__esModule: true,
 	default: (props: any) => {
 		// eslint-disable-next-line @next/next/no-img-element
-		return <img {...props} alt={props.alt} />;
+		return <img {...props} alt={props.alt} data-testid="movie-poster" />;
 	},
 }));
 
@@ -95,5 +95,25 @@ describe("MovieCard", () => {
 		const movieWithOneGenre = { ...mockMovie, genres: ["Action"] };
 		render(<MovieCard movie={movieWithOneGenre} />);
 		expect(screen.getByText("Action")).toBeInTheDocument();
+	});
+
+	it("shows placeholder when image fails to load", () => {
+		render(<MovieCard movie={mockMovie} />);
+
+		// Get the image element
+		const img = screen.getByTestId("movie-poster");
+
+		// Trigger error event
+		fireEvent.error(img);
+
+		// Now the placeholder should be visible
+		expect(screen.getByText("No Image")).toBeInTheDocument();
+	});
+
+	it("renders empty stars for low rating", () => {
+		const lowRatingMovie = { ...mockMovie, rating: 2.3 };
+		render(<MovieCard movie={lowRatingMovie} />);
+		// With rating 2.3, there should be 2 full stars, no half star, and 3 empty stars
+		expect(screen.getByText("2.3")).toBeInTheDocument();
 	});
 });

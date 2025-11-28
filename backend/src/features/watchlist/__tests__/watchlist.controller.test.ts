@@ -1,247 +1,289 @@
 /**
  * Watchlist Controller Unit Tests
- * Tests watchlist management logic including add, remove, and count operations
+ * Tests watchlist CRUD operations with mocked dependencies
  */
 
-describe("Watchlist Controller", () => {
-	// Mock data stores
-	let mockWatchlist: any[] = [];
-	let watchlistIdCounter = 1;
+import { Request, Response, NextFunction } from "express";
+import mongoose from "mongoose";
+import { WatchlistController } from "../watchlist.controller";
+import { Watchlist } from "../watchlist.model";
+import { Movie } from "../../movies/movie.model";
 
-	const sampleMovies = [
-		{ _id: "movie_1", title: "The Shawshank Redemption", rating: 4.9 },
-		{ _id: "movie_2", title: "The Dark Knight", rating: 4.8 },
-		{ _id: "movie_3", title: "Inception", rating: 4.7 },
-	];
+// Mock dependencies
+jest.mock("../watchlist.model");
+jest.mock("../../movies/movie.model");
 
-	const userId = "user_1";
+const MockedWatchlist = Watchlist as jest.Mocked<typeof Watchlist>;
+const MockedMovie = Movie as jest.Mocked<typeof Movie>;
 
-	// Helper functions to simulate watchlist logic
-	const addToWatchlist = (userId: string, movieId: string) => {
-		const existing = mockWatchlist.find((w) => w.userId === userId && w.movieId === movieId);
-		if (existing) {
-			throw new Error("Movie already in watchlist");
-		}
-		const item = {
-			_id: `watchlist_${watchlistIdCounter++}`,
-			userId,
-			movieId,
-			addedAt: new Date(),
-		};
-		mockWatchlist.push(item);
-		return item;
-	};
+describe("WatchlistController", () => {
+	let mockReq: Partial<Request>;
+	let mockRes: Partial<Response>;
+	let mockNext: NextFunction;
 
-	const removeFromWatchlist = (userId: string, movieId: string) => {
-		const index = mockWatchlist.findIndex((w) => w.userId === userId && w.movieId === movieId);
-		if (index === -1) {
-			return null;
-		}
-		const [removed] = mockWatchlist.splice(index, 1);
-		return removed;
-	};
+	const mockUserId = "user123";
+	const mockMovieId = "507f1f77bcf86cd799439011";
 
-	const getWatchlist = (userId: string) => {
-		const items = mockWatchlist.filter((w) => w.userId === userId);
-		return items.map((item) => ({
-			...item,
-			movie: sampleMovies.find((m) => m._id === item.movieId),
-		}));
-	};
-
-	const getWatchlistCount = (userId: string) => {
-		return mockWatchlist.filter((w) => w.userId === userId).length;
-	};
-
-	const isInWatchlist = (userId: string, movieId: string) => {
-		return mockWatchlist.some((w) => w.userId === userId && w.movieId === movieId);
-	};
-
-	const isValidMovieId = (movieId: string): boolean => {
-		return Boolean(movieId && movieId.length >= 5);
-	};
-
-	const movieExists = (movieId: string) => {
-		return sampleMovies.some((m) => m._id === movieId);
+	const mockMovie = {
+		_id: mockMovieId,
+		title: "The Dark Knight",
+		genres: ["Action", "Crime", "Drama"],
+		rating: 4.8,
 	};
 
 	beforeEach(() => {
-		mockWatchlist = [];
-		watchlistIdCounter = 1;
+		jest.clearAllMocks();
+
+		mockReq = {
+			body: {},
+			params: {},
+		};
+		(mockReq as any).userId = mockUserId;
+
+		mockRes = {
+			status: jest.fn().mockReturnThis(),
+			json: jest.fn().mockReturnThis(),
+		};
+
+		mockNext = jest.fn();
 	});
 
-	describe("GET /api/watchlist", () => {
-		it("should return empty watchlist initially", () => {
-			const watchlist = getWatchlist(userId);
+	describe("getAll", () => {
+		it("should return all watchlist items for user", async () => {
+			const mockWatchlistItems = [
+				{ _id: "watch1", userId: mockUserId, movieId: mockMovie },
+				{ _id: "watch2", userId: mockUserId, movieId: { ...mockMovie, _id: "movie2", title: "Inception" } },
+			];
 
-			expect(watchlist).toHaveLength(0);
+			const mockSelect = jest.fn().mockReturnValue({
+				sort: jest.fn().mockResolvedValue(mockWatchlistItems),
+			});
+			const mockPopulate = jest.fn().mockReturnValue({ select: mockSelect });
+			(MockedWatchlist.find as jest.Mock).mockReturnValue({ populate: mockPopulate });
+
+			await WatchlistController.getAll(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(MockedWatchlist.find).toHaveBeenCalledWith({ userId: mockUserId });
+			expect(mockRes.status).toHaveBeenCalledWith(200);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: true,
+				data: {
+					watchlist: [mockMovie, { ...mockMovie, _id: "movie2", title: "Inception" }],
+				},
+			});
 		});
 
-		it("should return watchlist with movies", () => {
-			addToWatchlist(userId, "movie_1");
-			addToWatchlist(userId, "movie_2");
+		it("should filter out null movies", async () => {
+			const mockWatchlistItems = [
+				{ _id: "watch1", userId: mockUserId, movieId: mockMovie },
+				{ _id: "watch2", userId: mockUserId, movieId: null },
+			];
 
-			const watchlist = getWatchlist(userId);
+			const mockSelect = jest.fn().mockReturnValue({
+				sort: jest.fn().mockResolvedValue(mockWatchlistItems),
+			});
+			const mockPopulate = jest.fn().mockReturnValue({ select: mockSelect });
+			(MockedWatchlist.find as jest.Mock).mockReturnValue({ populate: mockPopulate });
 
-			expect(watchlist).toHaveLength(2);
-			expect(watchlist[0].movie).toHaveProperty("title");
+			await WatchlistController.getAll(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: true,
+				data: {
+					watchlist: [mockMovie],
+				},
+			});
 		});
 
-		it("should not include other users watchlist items", () => {
-			addToWatchlist(userId, "movie_1");
-			addToWatchlist("user_2", "movie_2");
+		it("should return empty watchlist", async () => {
+			const mockSelect = jest.fn().mockReturnValue({
+				sort: jest.fn().mockResolvedValue([]),
+			});
+			const mockPopulate = jest.fn().mockReturnValue({ select: mockSelect });
+			(MockedWatchlist.find as jest.Mock).mockReturnValue({ populate: mockPopulate });
 
-			const watchlist = getWatchlist(userId);
+			await WatchlistController.getAll(mockReq as Request, mockRes as Response, mockNext);
 
-			expect(watchlist).toHaveLength(1);
-			expect(watchlist[0].movieId).toBe("movie_1");
-		});
-	});
-
-	describe("GET /api/watchlist/count", () => {
-		it("should return 0 for empty watchlist", () => {
-			const count = getWatchlistCount(userId);
-
-			expect(count).toBe(0);
-		});
-
-		it("should return correct count after adding movies", () => {
-			addToWatchlist(userId, "movie_1");
-			addToWatchlist(userId, "movie_2");
-
-			const count = getWatchlistCount(userId);
-
-			expect(count).toBe(2);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: true,
+				data: {
+					watchlist: [],
+				},
+			});
 		});
 
-		it("should not count other users items", () => {
-			addToWatchlist(userId, "movie_1");
-			addToWatchlist("user_2", "movie_2");
-			addToWatchlist("user_2", "movie_3");
+		it("should call next with error on exception", async () => {
+			const error = new Error("Database error");
+			(MockedWatchlist.find as jest.Mock).mockImplementation(() => {
+				throw error;
+			});
 
-			const count = getWatchlistCount(userId);
+			await WatchlistController.getAll(mockReq as Request, mockRes as Response, mockNext);
 
-			expect(count).toBe(1);
-		});
-	});
-
-	describe("POST /api/watchlist", () => {
-		it("should add movie to watchlist", () => {
-			const item = addToWatchlist(userId, "movie_1");
-
-			expect(item).toHaveProperty("movieId", "movie_1");
-			expect(item).toHaveProperty("userId", userId);
-			expect(getWatchlistCount(userId)).toBe(1);
-		});
-
-		it("should return count after adding", () => {
-			addToWatchlist(userId, "movie_1");
-			addToWatchlist(userId, "movie_2");
-
-			expect(getWatchlistCount(userId)).toBe(2);
-		});
-
-		it("should reject duplicate movie", () => {
-			addToWatchlist(userId, "movie_1");
-
-			expect(() => {
-				addToWatchlist(userId, "movie_1");
-			}).toThrow("already in watchlist");
-		});
-
-		it("should reject invalid movie ID", () => {
-			expect(isValidMovieId("x")).toBe(false);
-			expect(isValidMovieId("")).toBe(false);
-		});
-
-		it("should reject non-existent movie", () => {
-			expect(movieExists("non_existent_movie")).toBe(false);
-		});
-
-		it("should accept valid movie", () => {
-			expect(movieExists("movie_1")).toBe(true);
-			expect(isValidMovieId("movie_1")).toBe(true);
+			expect(mockNext).toHaveBeenCalledWith(error);
 		});
 	});
 
-	describe("DELETE /api/watchlist/:movieId", () => {
+	describe("getCount", () => {
+		it("should return watchlist count for user", async () => {
+			(MockedWatchlist.countDocuments as jest.Mock).mockResolvedValue(5);
+
+			await WatchlistController.getCount(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(MockedWatchlist.countDocuments).toHaveBeenCalledWith({ userId: mockUserId });
+			expect(mockRes.status).toHaveBeenCalledWith(200);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: true,
+				data: { count: 5 },
+			});
+		});
+
+		it("should return zero count for empty watchlist", async () => {
+			(MockedWatchlist.countDocuments as jest.Mock).mockResolvedValue(0);
+
+			await WatchlistController.getCount(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: true,
+				data: { count: 0 },
+			});
+		});
+
+		it("should call next with error on exception", async () => {
+			const error = new Error("Database error");
+			(MockedWatchlist.countDocuments as jest.Mock).mockRejectedValue(error);
+
+			await WatchlistController.getCount(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(mockNext).toHaveBeenCalledWith(error);
+		});
+	});
+
+	describe("add", () => {
 		beforeEach(() => {
-			addToWatchlist(userId, "movie_1");
+			mockReq.body = { movieId: mockMovieId };
 		});
 
-		it("should remove movie from watchlist", () => {
-			const removed = removeFromWatchlist(userId, "movie_1");
+		it("should add movie to watchlist successfully", async () => {
+			(MockedMovie.findById as jest.Mock).mockResolvedValue(mockMovie);
+			(MockedWatchlist.findOne as jest.Mock).mockResolvedValue(null);
+			(MockedWatchlist.create as jest.Mock).mockResolvedValue({
+				_id: "watchlist123",
+				userId: mockUserId,
+				movieId: mockMovieId,
+			});
+			(MockedWatchlist.countDocuments as jest.Mock).mockResolvedValue(1);
 
-			expect(removed).not.toBeNull();
-			expect(getWatchlistCount(userId)).toBe(0);
+			await WatchlistController.add(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(MockedMovie.findById).toHaveBeenCalledWith(mockMovieId);
+			expect(MockedWatchlist.findOne).toHaveBeenCalledWith({ userId: mockUserId, movieId: mockMovieId });
+			expect(MockedWatchlist.create).toHaveBeenCalledWith({ userId: mockUserId, movieId: mockMovieId });
+			expect(mockRes.status).toHaveBeenCalledWith(201);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: true,
+				data: {
+					watchlistItem: {
+						id: "watchlist123",
+						movieId: mockMovieId,
+					},
+					count: 1,
+				},
+			});
 		});
 
-		it("should return updated count after removal", () => {
-			addToWatchlist(userId, "movie_2");
-			expect(getWatchlistCount(userId)).toBe(2);
+		it("should return 404 if movie not found", async () => {
+			(MockedMovie.findById as jest.Mock).mockResolvedValue(null);
 
-			removeFromWatchlist(userId, "movie_1");
-			expect(getWatchlistCount(userId)).toBe(1);
+			await WatchlistController.add(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(mockRes.status).toHaveBeenCalledWith(404);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: false,
+				error: "Movie not found",
+			});
 		});
 
-		it("should return null when removing movie not in watchlist", () => {
-			const removed = removeFromWatchlist(userId, "movie_3");
+		it("should return 400 if movie already in watchlist", async () => {
+			(MockedMovie.findById as jest.Mock).mockResolvedValue(mockMovie);
+			(MockedWatchlist.findOne as jest.Mock).mockResolvedValue({ _id: "existing" });
 
-			expect(removed).toBeNull();
+			await WatchlistController.add(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(mockRes.status).toHaveBeenCalledWith(400);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: false,
+				error: "Movie already in watchlist",
+			});
 		});
 
-		it("should not affect other users watchlist", () => {
-			addToWatchlist("user_2", "movie_1");
+		it("should call next with error on exception", async () => {
+			const error = new Error("Database error");
+			(MockedMovie.findById as jest.Mock).mockRejectedValue(error);
 
-			removeFromWatchlist(userId, "movie_1");
+			await WatchlistController.add(mockReq as Request, mockRes as Response, mockNext);
 
-			expect(isInWatchlist("user_2", "movie_1")).toBe(true);
-			expect(isInWatchlist(userId, "movie_1")).toBe(false);
+			expect(mockNext).toHaveBeenCalledWith(error);
 		});
 	});
 
-	describe("Watchlist State", () => {
-		it("should track if movie is in watchlist", () => {
-			expect(isInWatchlist(userId, "movie_1")).toBe(false);
-
-			addToWatchlist(userId, "movie_1");
-
-			expect(isInWatchlist(userId, "movie_1")).toBe(true);
+	describe("remove", () => {
+		beforeEach(() => {
+			mockReq.params = { movieId: mockMovieId };
 		});
 
-		it("should maintain accurate count through multiple operations", () => {
-			// Add 3 movies
-			sampleMovies.forEach((m) => addToWatchlist(userId, m._id));
-			expect(getWatchlistCount(userId)).toBe(3);
+		it("should remove movie from watchlist successfully", async () => {
+			jest.spyOn(mongoose.Types.ObjectId, "isValid").mockReturnValue(true);
+			(MockedWatchlist.deleteOne as jest.Mock).mockResolvedValue({ deletedCount: 1 });
+			(MockedWatchlist.countDocuments as jest.Mock).mockResolvedValue(0);
 
-			// Remove 2 movies
-			removeFromWatchlist(userId, "movie_1");
-			removeFromWatchlist(userId, "movie_2");
-			expect(getWatchlistCount(userId)).toBe(1);
+			await WatchlistController.remove(mockReq as Request, mockRes as Response, mockNext);
 
-			// Verify list
-			const watchlist = getWatchlist(userId);
-			expect(watchlist).toHaveLength(1);
-			expect(watchlist[0].movie?.title).toBe("Inception");
-		});
-	});
-
-	describe("Edge Cases", () => {
-		it("should handle adding same movie by different users", () => {
-			addToWatchlist("user_1", "movie_1");
-			addToWatchlist("user_2", "movie_1");
-
-			expect(getWatchlistCount("user_1")).toBe(1);
-			expect(getWatchlistCount("user_2")).toBe(1);
+			expect(MockedWatchlist.deleteOne).toHaveBeenCalledWith({ userId: mockUserId, movieId: mockMovieId });
+			expect(mockRes.status).toHaveBeenCalledWith(200);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: true,
+				data: {
+					message: "Movie removed from watchlist",
+					count: 0,
+				},
+			});
 		});
 
-		it("should handle removing then re-adding movie", () => {
-			addToWatchlist(userId, "movie_1");
-			removeFromWatchlist(userId, "movie_1");
-			addToWatchlist(userId, "movie_1");
+		it("should return 400 for invalid movie ID", async () => {
+			mockReq.params = { movieId: "invalid-id" };
+			jest.spyOn(mongoose.Types.ObjectId, "isValid").mockReturnValue(false);
 
-			expect(isInWatchlist(userId, "movie_1")).toBe(true);
-			expect(getWatchlistCount(userId)).toBe(1);
+			await WatchlistController.remove(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(mockRes.status).toHaveBeenCalledWith(400);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: false,
+				error: "Invalid movie ID",
+			});
+		});
+
+		it("should return 404 if movie not in watchlist", async () => {
+			jest.spyOn(mongoose.Types.ObjectId, "isValid").mockReturnValue(true);
+			(MockedWatchlist.deleteOne as jest.Mock).mockResolvedValue({ deletedCount: 0 });
+
+			await WatchlistController.remove(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(mockRes.status).toHaveBeenCalledWith(404);
+			expect(mockRes.json).toHaveBeenCalledWith({
+				success: false,
+				error: "Movie not in watchlist",
+			});
+		});
+
+		it("should call next with error on exception", async () => {
+			jest.spyOn(mongoose.Types.ObjectId, "isValid").mockReturnValue(true);
+			const error = new Error("Database error");
+			(MockedWatchlist.deleteOne as jest.Mock).mockRejectedValue(error);
+
+			await WatchlistController.remove(mockReq as Request, mockRes as Response, mockNext);
+
+			expect(mockNext).toHaveBeenCalledWith(error);
 		});
 	});
 });
