@@ -19,9 +19,6 @@ export const env = {
 	get JWT_SECRET(): string {
 		return getEnvVar("JWT_SECRET", true);
 	},
-	get FRONTEND_URL(): string {
-		return getEnvVar("FRONTEND_URL", false) || "http://localhost:3000";
-	},
 	get NODE_ENV(): string {
 		return getEnvVar("NODE_ENV", false) || "development";
 	},
