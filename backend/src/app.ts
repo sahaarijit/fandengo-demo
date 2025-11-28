@@ -17,13 +17,19 @@ const app: Express = express();
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// CORS configuration - allow all origins
 app.use(
 	cors({
 		origin: '*',
 		methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-		allowedHeaders: ['Content-Type', 'Authorization'],
+		allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+		preflightContinue: false,
+		optionsSuccessStatus: 204,
 	}),
 );
+
+// Explicit OPTIONS handler for preflight requests
+app.options('*', cors());
 
 // Logging middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
